@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width">
+
+  <title>Owned Steam Game RSS Feeds</title>
+
+  <script type="module">
+    document.documentElement.classList.remove('no-js');
+    document.documentElement.classList.add('js');
+  </script>
+
+  <link rel="stylesheet" href="/style.css">
+
+  <meta name="description" content="Generate RSS Feeds from owned Steam games">
+  <meta property="og:title" content="Owned Steam Games RSS Feeds">
+  <meta property="og:description" content="Generate RSS Feeds from owned Steam games">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://steam-rss.zackboe.hm">
+  <link rel="canonical" href="https://steam-rss.zackboe.hm">
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📑</text></svg>">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="theme-color" content="#1b2838">
+</head>
+
+<body>
+
+  <main>
+    <h1>Owned Steam Game RSS Feeds</h1>
+    <h2>Subscribe to news feeds for your Steam games in your reader of choice!</h2>
+
+    <p>Generates an .opml of <a href="https://aboutfeeds.com/">RSS feeds</a> for your currently owned Steam games.</p>
+
+    <form name="form" action="/.netlify/functions/generateOPML">
+      <label for="steamURL">Steam Profile URL:</label>
+      <div>
+        <input id="steamURL" name="steamURL" placeholder="https://steamcommunity.com/id/gabelogannewell"/>
+        <button type="submit">Generate OPML</button>
+      </div>
+      <div class="options">
+      <label for="includeFree">Include free games? <input type="checkbox" name="includeFree" id="includeFree"></label>
+      <label for="includeUnplayed">Include unplayed games? <input type="checkbox" checked name="includeUnplayed" id="includeUnplayed"></label>
+      </div>
+      <section id="result">
+
+      </section>
+    </form>
+
+    <p><small>A quick <a href="https://github.com/zackboe/steam-rss">open source</a> project by <a href="https://zackboe.hm">Zack Boehm</a></small></p>
+
+  </main>
+
+<script>
+
+  document.querySelector('form').addEventListener('submit', (e) => {
+    e.preventDefault()
+    const steamURL = form.steamURL.value
+    const result = document.querySelector('#result')
+    result.innerHTML = '<p>Working on it...</p>'
+    const userURL = /(?:http|https):\/\/(steamcommunity\.com)\/(profiles|id)\/(.*)/i.exec(steamURL)
+    if (userURL?.[1] == 'steamcommunity.com') {
+      
+      fetch(`/.netlify/functions/generateOPML`, {
+        method: 'post',
+        body: JSON.stringify({ steamURL: steamURL, includeFree: form.includeFree.checked, includeUnplayed: form.includeUnplayed.checked }),
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(resp => resp.json())
+      .then(body => {
+        console.log(body)
+        if(!body.error) {
+
+          result.innerHTML = `
+          <img src="${body.profile.avatar}">
+          <h1>Hey, ${body.profile.name}!</h1>
+          <p>Steam said you've got ${body.games} games!</p>
+          <p>You can <a download="steam-updates.opml" href="data:text/xml;charset=utf-8,${encodeURIComponent(body.opml)}">download the generated .opml</a> and import it into your favorite RSS reader.</p>
+          `
+          
+        } else result.innerHTML = body.error
+
+      })
+
+      
+
+    } else {
+      result.innerHTML = `Looks like that isn't a Steam Community URL? Use the format <code>https://steamcommunity.com/id/gabelogannewell</code> or <code>https://steamcommunity.com/profiles/76561197960287930</code>`
+    }
+
+    
+  })
+
+</script>
+</body>
+</html>
