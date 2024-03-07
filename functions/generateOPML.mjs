@@ -1,15 +1,15 @@
-import fetch from 'node-fetch'
+import got from 'got'
 import { Parser } from 'xml2js'
 
 const fetchProfile = async (url) => {
+  console.log('fetching profile')
   const userURL = /(?:http|https):\/\/(steamcommunity\.com)\/(profiles|id)\/(.*)/i.exec(url)
   if (userURL?.[1] == 'steamcommunity.com') {
-    const resp = await fetch(url+'?xml=1')
-    const xml = await resp.text()
-    
-    const profile = await new Parser().parseStringPromise(xml)
+    const resp = await got(url+'?xml=1')
+    const profile = await new Parser().parseStringPromise(resp.body)
     
     if (profile.profile) {
+      console.log(`Got profile ${profile.profile.steamID64} for ${profile.profile.realname}`)
       return profile.profile
     } else {
       console.error('Error finding steam id. Malformed URL?', url)
@@ -29,12 +29,11 @@ exports.handler = async function(event, context, opts = {}) {
   else opts = event.queryStringParameters
 
   if(!opts.steamURL && !event?.queryStringParameters?.steamURL) return { statusCode: 500, body: JSON.stringify({ error: `Couldn't find steamURL submitted. Probably my fault, sorry!`})}
+  console.log('fetching from steam')
   const profile = await fetchProfile(opts.steamURL)
   
   if (profile?.steamID64) {
-    
-    const resp = await fetch(`http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?steamid=${profile.steamID64}&key=${process.env.steam_api}&include_appinfo=true&include_played_free_games=${opts.includeFree || false}&include_free_sub=${opts.includeFree || false}`)
-    const body = await resp.json()
+    const body = await got(`http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?steamid=${profile.steamID64}&key=${process.env.steam_api}&include_appinfo=true&include_played_free_games=${opts.includeFree || false}&include_free_sub=${opts.includeFree || false}`).json();
     
     let games = body?.response?.games
     if(games?.length > 0 && games[0].appid) {
@@ -51,7 +50,7 @@ exports.handler = async function(event, context, opts = {}) {
 <body>
   <outline text="Steam Updates">`
 opml += games.map(game => `
-    <outline text="${game.name}" title="${game.name}" type="rss" xmlUrl="https://store.steampowered.com/feeds/news/app/${game.appid}/" htmlUrl="https://store.steampowered.com/news/app/${game.appid}/"/>`
+    <outline text="${game.name.replace('&', '&amp;')}" title="${game.name.replace('&', '&amp;')}" type="rss" xmlUrl="https://store.steampowered.com/feeds/news/app/${game.appid}/" htmlUrl="https://store.steampowered.com/news/app/${game.appid}/"/>`
 ).join('')
 opml += `
   </outline>
@@ -64,11 +63,36 @@ opml += `
       // Assume no js, direct URL/form submission
       if(!event.body) return { statusCode: 200, headers: { 'Content-Type': 'text/xml', 'Content-Disposition': 'attachment; filename=steam-updates.opml' }, body: opml }
 
+
+      // Return OPML & games json for client filtering
+      games = games.map(game => ({
+        ...game,
+        image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`,
+        store: `https://store.steampowered.com/app/${game.appid}/`
+      }))
+
+      games.sort((a, b) => { return b.playtime_forever - a.playtime_forever})
+
+      let table = '<thead><tr><th class="no-sort">Image</th><th>Title</th><th class="no-sort">Preview Feed</th><th>Playtime</th><th>Playtime (Last 2 Weeks)</th><th>Include in OPML</th></tr></thead>'
+      games.forEach(game => {
+        table += `<tr data-appid="${game.appid}">
+          <td><a href="${game.store}"><img src="${game.image}" loading="lazy"></a></td>
+          <td><a href="${game.store}">${game.name}</a></td>
+          <td><a href="https://store.steampowered.com/news/app/${game.appid}"><img src="/link.svg"></a></td>
+          <td data-sort="${game.playtime_forever}">${new Intl.NumberFormat().format(Number(game.playtime_forever/60).toFixed(2))} hours</td>
+          <td data-sort="${game.playtime_2weeks || 0}">${new Intl.NumberFormat().format(Number(game.playtime_2weeks/60 || 0).toFixed(2))} hours</td>
+          <td data-sort="1"><input type="checkbox" checked id="${game.appid}" name="${game.appid}" data-appid="${game.appid}" data-name="${game.name}"></td>
+        </tr>`
+      })
+      table += '</tbody>'
+
       return {
         statusCode: 200,
         body: JSON.stringify({
           profile: { name: profile.steamID, avatar: profile.avatarFull?.[0] },
-          games: games.length,
+          count: games.length,
+          games: games,
+          table: table,
           opml: opml
         }, null, 2)
       }
