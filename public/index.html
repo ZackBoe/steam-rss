@@ -47,8 +47,9 @@
         <button type="submit">Generate OPML</button>
       </div>
       <div class="options no-js">
-      <label for="includeFree">Include free games? <input type="checkbox" name="includeFree" id="includeFree"></label>
-      <label for="includeUnplayed">Include unplayed games? <input type="checkbox" checked name="includeUnplayed" id="includeUnplayed"></label>
+        <label for="includeWishlist">Include wishlisted games? (max 500)<input type="checkbox" name="includeWishlist" id="includeWishlist"></label>
+        <label for="includeFree">Include free games? <input type="checkbox" name="includeFree" id="includeFree"></label>
+        <label for="includeUnplayed">Include unplayed games? <input type="checkbox" checked name="includeUnplayed" id="includeUnplayed"></label>
       </div>
     </form>
 
@@ -92,7 +93,7 @@
       
       fetch(`/.netlify/functions/generateOPML`, {
         method: 'post',
-        body: JSON.stringify({ steamURL: steamURL, includeFree: form.includeFree.checked, includeUnplayed: form.includeUnplayed.checked }),
+        body: JSON.stringify({ steamURL: steamURL, includeWishlist: form.includeWishlist.checked, includeFree: form.includeFree.checked, includeUnplayed: form.includeUnplayed.checked }),
         headers: { 'Content-Type': 'application/json' }
       })
       .then(resp => resp.json())

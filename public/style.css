@@ -123,7 +123,7 @@ main.result img {
   top: 0;
   background: var(--background);
   height: 150px;
-  z-index: 1;
+  z-index: 5;
 }
 
 table {
@@ -133,8 +133,12 @@ table {
 table thead {
   position: sticky;
   top: 150px;
-  z-index: 1;
+  z-index: 5;
   background: var(--background);
+}
+
+table thead th {
+  padding-inline: 1rem;
 }
 
 table thead, table tr {
@@ -174,7 +178,23 @@ tr:has(input[type="checkbox"]:not(:checked)) {
 a[href="#main"] {
   transform: scale(1.5);
   top: 75px;
+  z-index: 5;
+}
+
+.wishlist {
+  position: relative;
+}
+
+.wishlist:before {
+  content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xml:space='preserve' style='fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round' viewBox='0 0 48 48'%3E%3Cpath d='m19 21-7-4-7 4V5c0-1.097.903-2 2-2h10c1.097 0 2 .903 2 2v16Z' style='fill:%2366c0f4;fill-rule:nonzero;stroke:%23000;stroke-width:.44px' transform='translate(-4 -4) scale(2.33333)'/%3E%3Cpath d='m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z' style='fill:none;fill-rule:nonzero;stroke:%23000;stroke-width:2px' transform='matrix(1.25 0 0 1.25 9 5.7282)'/%3E%3C/svg%3E");
+  width: 48px;
+  height: 48px;
+  position: absolute;
+  display: block;
+  left: 0;
   z-index: 1;
+  top: 20px;
+  left: 50px;
 }
 
 .zack {

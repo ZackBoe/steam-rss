@@ -23,6 +23,50 @@ const fetchProfile = async (url) => {
   
 }
 
+const fetchWishlist = async (steamID) => {
+  const paginator = await got.paginate(`https://store.steampowered.com/wishlist/profiles/${steamID}/wishlistdata/`, {
+    searchParams: {
+      p: 0
+    },
+    pagination: {
+      transform: (response) => {
+        return Object.entries(JSON.parse(response.body)).map(game => {
+          return {
+            appid: game[0],
+            name: game[1].name,
+            wishlist: true
+          }
+        })
+      },
+      paginate: ({response, currentItems}) => {
+        if (currentItems.length === 0) {
+          return false;
+        }
+  
+        const {searchParams} = response.request.options;
+        const previousPage = Number(searchParams.get('p') ?? 1);
+  
+        return {
+          searchParams: {
+            p: previousPage + 1
+          }
+        };
+      },
+      countLimit: 500,
+      backoff: 10,
+      requestLimit: 20,
+      stackAllItems: true
+    }
+  })
+
+  let wishlist = []
+  for await (const item of paginator) {
+    wishlist.push(item)
+  }
+
+  return wishlist
+}
+
 exports.handler = async function(event, context, opts = {}) {
 
   if(event.body) opts = JSON.parse(event.body)
@@ -39,6 +83,11 @@ exports.handler = async function(event, context, opts = {}) {
     if(games?.length > 0 && games[0].appid) {
       
       if(!opts.includeUnplayed) games = games.filter(game => game.playtime_forever > 0)
+
+      if(opts.includeWishlist) {
+        const wishlist = await fetchWishlist(profile.steamID64)
+        games = games.concat(wishlist)
+      }
       
       let opml = `<?xml version="1.0" encoding="UTF-8"?><opml version="2.0">
 <head>
@@ -73,13 +122,14 @@ opml += `
 
       games.sort((a, b) => { return b.playtime_forever - a.playtime_forever})
 
-      let table = '<thead><tr><th class="no-sort">Image</th><th>Title</th><th class="no-sort">Preview Feed</th><th>Playtime</th><th>Playtime (Last 2 Weeks)</th><th>Include in OPML</th></tr></thead>'
+      let table = `<thead><tr><th class="no-sort">Image</th><th>Title</th><th class="no-sort">Preview <br>Feed</th>${opts.includeWishlist ? '<th>Owned</th>' : '' }<th>Playtime</th><th>Playtime <br>(Last 2 Weeks)</th><th>Include in OPML</th></tr></thead>`
       games.forEach(game => {
         table += `<tr data-appid="${game.appid}">
-          <td><a href="${game.store}"><img src="${game.image}" loading="lazy"></a></td>
+          <td><a ${game.wishlist ? 'class="wishlist"' : ''} href="${game.store}"><img src="${game.image}" loading="lazy"></a></td>
           <td><a href="${game.store}">${game.name}</a></td>
           <td><a href="https://store.steampowered.com/news/app/${game.appid}"><img src="/link.svg"></a></td>
-          <td data-sort="${game.playtime_forever}">${new Intl.NumberFormat().format(Number(game.playtime_forever/60).toFixed(2))} hours</td>
+          ${opts.includeWishlist ? `<td>${game.wishlist ? 'Wishlisted' : 'In Library'}</td>` : '' }
+          <td data-sort="${game.playtime_forever || 0}">${new Intl.NumberFormat().format(Number(game.playtime_forever/60 || 0).toFixed(2))} hours</td>
           <td data-sort="${game.playtime_2weeks || 0}">${new Intl.NumberFormat().format(Number(game.playtime_2weeks/60 || 0).toFixed(2))} hours</td>
           <td data-sort="1"><input type="checkbox" checked id="${game.appid}" name="${game.appid}" data-appid="${game.appid}" data-name="${game.name}"></td>
         </tr>`
