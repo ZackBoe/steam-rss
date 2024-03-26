@@ -99,7 +99,7 @@
       .then(resp => resp.json())
       .then(body => {
         console.log(body)
-        if(!body.error) {
+        if(!body.error || !body.errorType) {
 
           document.querySelector('.extension').style.display = 'none'
           const main = document.querySelector('main')
@@ -153,7 +153,7 @@
           document.querySelector('[data-export]').addEventListener('click', exportFilterList)
           document.querySelector('[data-import]').addEventListener('click', importFilterList)
 
-        } else result.innerHTML = body.error
+        } else result.innerHTML = body.error || 'There was an error getting your games. Is your profile and game details public?'
 
       })
 

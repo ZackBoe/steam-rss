@@ -24,7 +24,8 @@ const fetchProfile = async (url) => {
 }
 
 const fetchWishlist = async (steamID) => {
-  const paginator = await got.paginate(`https://store.steampowered.com/wishlist/profiles/${steamID}/wishlistdata/`, {
+  try {
+    const paginator = await got.paginate(`https://store.steampowered.com/wishlist/profiles/${steamID}/wishlistdata/`, {
     searchParams: {
       p: 0
     },
@@ -65,6 +66,9 @@ const fetchWishlist = async (steamID) => {
   }
 
   return wishlist
+  } catch(e) {
+    return []
+  }
 }
 
 exports.handler = async function(event, context, opts = {}) {
