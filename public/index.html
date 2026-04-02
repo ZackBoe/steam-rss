@@ -260,8 +260,10 @@
   function applyImportedList(imported) {
     imported.exclude.forEach(game => {
       const app = document.querySelector(`tr[data-appid="${game.appid}"]`)
-      app.querySelector('input[type="checkbox"]').checked = false
-      app.querySelector('input[type="checkbox"]').parentElement.dataset.sort = "0"
+      if(app) {
+          app.querySelector('input[type="checkbox"]').checked = false
+          app.querySelector('input[type="checkbox"]').parentElement.dataset.sort = "0"
+      } else console.log(`Could not find imported ignored game in list:`, game)
 
     })
     document.querySelector('[data-generate] span').innerText = document.querySelectorAll('tbody input[type="checkbox"]:not(:checked)').length
