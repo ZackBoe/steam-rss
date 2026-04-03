@@ -1,6 +1,8 @@
 import got from 'got'
 import { Parser } from 'xml2js'
 
+const assetBase = `https://shared.steamstatic.com/store_item_assets/`
+
 const fetchProfile = async (url) => {
   console.log('fetching profile')
   const userURL = /(?:http|https):\/\/(steamcommunity\.com)\/(profiles|id)\/(.*)/i.exec(url)
@@ -24,51 +26,42 @@ const fetchProfile = async (url) => {
 }
 
 const fetchWishlist = async (steamID) => {
-  try {
-    const paginator = await got.paginate(`https://store.steampowered.com/wishlist/profiles/${steamID}/wishlistdata/`, {
-    searchParams: {
-      p: 0
-    },
-    pagination: {
-      transform: (response) => {
-        return Object.entries(JSON.parse(response.body)).map(game => {
-          return {
-            appid: game[0],
-            name: game[1].name,
-            wishlist: true
-          }
-        })
-      },
-      paginate: ({response, currentItems}) => {
-        if (currentItems.length === 0) {
-          return false;
-        }
-  
-        const {searchParams} = response.request.options;
-        const previousPage = Number(searchParams.get('p') ?? 1);
-  
-        return {
-          searchParams: {
-            p: previousPage + 1
-          }
-        };
-      },
-      countLimit: 500,
-      backoff: 10,
-      requestLimit: 20,
-      stackAllItems: true
-    }
+
+  const wishlistData = await fetch(`https://api.steampowered.com/IWishlistService/GetWishlist/v1?steamid=${steamID}`).then(res => res.json())
+  let wishlistIds = wishlistData.response.items.map(i => {
+    return { appid: i.appid }
   })
-
-  let wishlist = []
-  for await (const item of paginator) {
-    wishlist.push(item)
+  let wishlistIdGroups = []
+  let wishlistItems = []
+  while (wishlistIds.length) {
+    wishlistIdGroups.push(wishlistIds.splice(0, 100))
   }
+  
+  console.log(`Got ${wishlistIdGroups.length} wishlist groups`)
 
-  return wishlist
-  } catch(e) {
-    return []
-  }
+  await Promise.all(wishlistIdGroups.slice(0,5).map(async (ids) => {
+    const request = { "ids": ids, "context": { "country_code": "US" }, "data_request": { "include_assets": true } }
+    const requestURL = `https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=${encodeURI(JSON.stringify(request))}`
+    const itemDetails = await fetch(requestURL)
+    .then(res => res.json())
+    
+    const items = itemDetails.response.store_items.map(i => {
+      return {
+        appid: i.id,
+        name: i.name,
+        image: i?.assets ? `${assetBase}${i.assets.asset_url_format.replace('${FILENAME}', i.assets['header'])}` : null,
+        wishlist: true
+      }
+    })
+
+    wishlistItems = wishlistItems.concat(items)
+
+  }))
+
+  console.log(`Got ${wishlistItems.length} wishlist items with details`)
+
+  return wishlistItems
+
 }
 
 exports.handler = async function(event, context, opts = {}) {
@@ -89,7 +82,7 @@ exports.handler = async function(event, context, opts = {}) {
       if(!opts.includeUnplayed) games = games.filter(game => game.playtime_forever > 0)
 
       if(opts.includeWishlist) {
-        const wishlist = await fetchWishlist(profile.steamID64)
+        const wishlist = await fetchWishlist(profile.steamID64[0])
         games = games.concat(wishlist)
       }
       
@@ -120,7 +113,7 @@ opml += `
       // Return OPML & games json for client filtering
       games = games.map(game => ({
         ...game,
-        image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`,
+        image: game.image ? game.image : `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appid}/header.jpg`,
         store: `https://store.steampowered.com/app/${game.appid}/`
       }))
 
@@ -129,7 +122,7 @@ opml += `
       let table = `<thead><tr><th class="no-sort">Image</th><th>Title</th><th class="no-sort">Preview <br>Feed</th>${opts.includeWishlist ? '<th>Owned</th>' : '' }<th>Playtime</th><th>Playtime <br>(Last 2 Weeks)</th><th>Include in OPML</th></tr></thead>`
       games.forEach(game => {
         table += `<tr data-appid="${game.appid}">
-          <td><a ${game.wishlist ? 'class="wishlist"' : ''} href="${game.store}"><img src="${game.image}" loading="lazy"></a></td>
+          <td><a ${game.wishlist ? 'class="wishlist"' : ''} href="${game.store}"><img src="${game.image}" onerror="this.onerror=null;this.src='https://steam-assets.netlify.app/assets/${game.appid}/header';" loading="lazy"></a></td>
           <td><a href="${game.store}">${game.name}</a></td>
           <td><a href="https://store.steampowered.com/news/app/${game.appid}"><img src="/link.svg"></a></td>
           ${opts.includeWishlist ? `<td>${game.wishlist ? 'Wishlisted' : 'In Library'}</td>` : '' }
